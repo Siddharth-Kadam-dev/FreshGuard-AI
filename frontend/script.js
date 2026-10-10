@@ -268,7 +268,7 @@ $("#itemPurchase").value=todayISO();
 
 
 
-const API_BASE = "http://127.0.0.1:8000/api/";
+const API_BASE = "https://freshguard-ai-7qyh.onrender.com/api/";
 let authToken = localStorage.getItem("freshguardToken");
 
 async function apiRequest(path, options = {}) {
