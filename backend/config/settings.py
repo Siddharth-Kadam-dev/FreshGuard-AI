@@ -27,11 +27,13 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
 
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
+
 ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
-    if host.strip()
+    "freshguard-ai-7qyh.onrender.com",
+    "localhost",
+    "127.0.0.1",
 ]
+
 
 
 
