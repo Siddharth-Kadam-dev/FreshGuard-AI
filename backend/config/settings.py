@@ -11,22 +11,14 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 from pathlib import Path
-
-
 import os
-from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Local development: read .env if present.
-# Render environment variables will take precedence.
 load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
-
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
-
 
 ALLOWED_HOSTS = [
     "freshguard-ai-7qyh.onrender.com",
@@ -38,19 +30,7 @@ ALLOWED_HOSTS = [
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_au%u*$qg-&t*-94zs_ozv&)j@z2-u0qwu@efwk_aix^k-26vn'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -104,10 +84,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
 
 DATABASES = {
     'default': {
