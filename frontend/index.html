@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#087f5b">
+  <title>FreshGuard AI | Smart Household Inventory</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="authView" class="auth-shell">
+    <section class="auth-brand">
+      <div class="brand-mark">🌿</div>
+      <p class="eyebrow">SMART HOUSEHOLD ASSISTANT</p>
+      <h1>FreshGuard <span>AI</span></h1>
+      <p class="brand-copy">Less waste. Better planning. Smarter living.</p>
+      <div class="auth-illustration">
+        <div class="produce">🥬</div><div class="produce">🥛</div><div class="produce">🥕</div><div class="produce">🍎</div>
+      </div>
+      <div class="brand-points"><span>✓ Track your home stock</span><span>✓ Catch expiry dates early</span><span>✓ Shop only what you need</span></div>
+    </section>
+    <section class="auth-panel">
+      <div class="auth-tabs">
+        <button class="tab active" data-auth="login">Login</button>
+        <button class="tab" data-auth="register">Register</button>
+      </div>
+      <form id="loginForm" class="auth-form">
+        <p class="eyebrow">WELCOME BACK</p><h2>Sign in to your home</h2>
+        <label>Email address<input id="loginEmail" type="email" placeholder="you@example.com" required></label>
+        <label>Password<input id="loginPassword" type="password" placeholder="Enter any password for demo" required minlength="4"></label>
+        <button class="btn primary full" type="submit">Login <span>→</span></button>
+        <p class="small-note">Demo frontend only: sign-in is simulated in this browser.</p>
+      </form>
+      <form id="registerForm" class="auth-form hidden">
+        <p class="eyebrow">GET STARTED</p><h2>Create your account</h2>
+        <label>Full name<input id="registerName" placeholder="Your name" required></label>
+        <label>Email address<input id="registerEmail" type="email" placeholder="you@example.com" required></label>
+        <label>Password<input id="registerPassword" type="password" placeholder="At least 4 characters" required minlength="4"></label>
+        <button class="btn primary full" type="submit">Create account <span>→</span></button>
+        <p class="small-note">Do not use a real password here. This demo has no secure authentication.</p>
+      </form>
+    </section>
+  </div>
+
+  <div id="appView" class="app hidden">
+    <aside class="sidebar">
+      <a class="logo" href="#" aria-label="FreshGuard AI home"><span class="logo-icon">🌿</span><span>FreshGuard <b>AI</b><small>SMART HOME INVENTORY</small></span></a>
+      <div class="nav-label">WORKSPACE</div>
+      <nav id="mainNav">
+        <button class="nav-link active" data-page="dashboard"><span>▦</span> Home Dashboard</button>
+        <button class="nav-link" data-page="inventory"><span>▤</span> Inventory Management</button>
+        <button class="nav-link" data-page="expiry"><span>◷</span> Expiry Tracking <i id="expiryNavCount">0</i></button>
+        <button class="nav-link" data-page="prediction"><span>⌁</span> Consumption & Prediction</button>
+        <button class="nav-link" data-page="shopping"><span>🛒</span> Smart Shopping List <i id="shoppingNavCount">0</i></button>
+      </nav>
+      <div class="sidebar-bottom"><div class="help-card"><span>✦</span><b>Fresh tip</b><p>Use older items first to reduce household food waste.</p></div><button id="logoutBtn" class="nav-link logout"><span>↪</span> Log out</button></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="menuBtn" class="menu-btn" aria-label="Open menu">☰</button>
+        <div class="crumb">Workspace <span>/</span> <b id="pageCrumb">Home Dashboard</b></div>
+        <div class="top-actions"><label class="search"><span>⌕</span><input id="globalSearch" placeholder="Search items..." aria-label="Search items"></label><button id="notificationBtn" class="icon-btn" title="Expiry alerts">♧<i></i></button><div class="avatar" id="avatar">FG</div></div>
+      </header>
+      <div class="content">
+        <section class="page active" id="page-dashboard">
+          <div class="welcome-row"><div><p class="eyebrow">YOUR HOUSEHOLD AT A GLANCE</p><h1 id="welcomeTitle">Good morning! 👋</h1><p class="muted">Here’s what’s happening with your household items today.</p></div><button class="btn primary" data-goto="inventory">＋ Add new item</button></div>
+          <div class="stat-grid">
+            <article class="stat-card"><div class="stat-top"><span>Total items</span><span class="stat-icon mint">▤</span></div><strong id="totalStat">0</strong><small>Items in your home</small></article>
+            <article class="stat-card"><div class="stat-top"><span>Low stock</span><span class="stat-icon orange">!</span></div><strong id="lowStat">0</strong><small>Need a refill soon</small></article>
+            <article class="stat-card"><div class="stat-top"><span>Expiring soon</span><span class="stat-icon red">◷</span></div><strong id="expiringStat">0</strong><small>Within the next 3 days</small></article>
+            <article class="stat-card"><div class="stat-top"><span>Shopping list</span><span class="stat-icon blue">🛒</span></div><strong id="shoppingStat">0</strong><small>Things to remember</small></article>
+          </div>
+          <div class="dashboard-grid">
+            <article class="panel"><div class="panel-head"><div><h3>Recent alerts</h3><p class="muted">Items that may need your attention</p></div><button class="text-btn" data-goto="expiry">View expiry tracking →</button></div><div id="recentAlerts" class="alert-list"></div></article>
+            <article class="panel"><div class="panel-head"><div><h3>Quick actions</h3><p class="muted">Keep your pantry in check</p></div></div><div class="quick-actions"><button data-goto="inventory"><span>＋</span><div><b>Add household item</b><small>Update your inventory</small></div><em>→</em></button><button data-goto="shopping"><span>🛒</span><div><b>View shopping list</b><small>Plan your next trip</small></div><em>→</em></button><button data-goto="prediction"><span>⌁</span><div><b>Check predictions</b><small>See estimated stock run-out</small></div><em>→</em></button></div></article>
+          </div>
+          <article class="panel table-panel"><div class="panel-head"><div><h3>Inventory overview</h3><p class="muted">A quick look at your household stock</p></div><button class="text-btn" data-goto="inventory">View all items →</button></div><div id="dashboardInventory"></div></article>
+        </section>
+
+        <section class="page" id="page-inventory">
+          <div class="welcome-row"><div><p class="eyebrow">YOUR HOUSEHOLD STOCK</p><h1>Inventory Management</h1><p class="muted">Add, edit and manage items across your home.</p></div><button id="newItemBtn" class="btn primary">＋ Add item</button></div>
+          <article class="panel">
+            <div class="toolbar"><label class="search wide">⌕ <input id="inventorySearch" placeholder="Search item name..."></label><select id="categoryFilter"><option value="">All categories</option><option>Grains</option><option>Dairy</option><option>Vegetables</option><option>Fruits</option><option>Meat</option><option>Household</option><option>Other</option></select><select id="locationFilter"><option value="">All locations</option><option>Fridge</option><option>Pantry</option><option>Kitchen</option><option>Freezer</option><option>Bathroom</option><option>Other</option></select></div>
+            <div id="inventoryTable"></div>
+          </article>
+          <p class="footnote">Tip: quantities and expiry dates are only as accurate as the information you enter.</p>
+        </section>
+
+        <section class="page" id="page-expiry">
+          <div class="welcome-row"><div><p class="eyebrow">STAY AHEAD OF WASTE</p><h1>Expiry Tracking</h1><p class="muted">Know what to use first and what has already expired.</p></div><div class="date-pill">◷ Updated automatically</div></div>
+          <div class="filter-pills" id="expiryFilters"><button class="pill active" data-expiry="all">All items</button><button class="pill" data-expiry="soon">Expiring soon</button><button class="pill" data-expiry="expired">Expired</button></div>
+          <article class="panel"><div id="expiryTable"></div></article>
+          <div class="info-banner"><span>✦</span><div><b>FreshGuard tip</b><p>Store items according to package instructions and check dates before consuming.</p></div></div>
+        </section>
+
+        <section class="page" id="page-prediction">
+          <div class="welcome-row"><div><p class="eyebrow">UNDERSTAND YOUR USAGE</p><h1>Consumption & Prediction</h1><p class="muted">Log usage to estimate how long your current stock may last.</p></div><button class="btn secondary" id="logUsageBtn">＋ Log consumption</button></div>
+          <div class="prediction-grid">
+            <article class="panel chart-panel"><div class="panel-head"><div><h3>Consumption history</h3><p class="muted">Recent logged usage by item</p></div><span class="date-pill">All records</span></div><div id="usageChart" class="bar-chart"></div><p class="chart-caption">Illustrative usage from entries you log; not an external data source.</p></article>
+            <article class="panel"><div class="panel-head"><div><h3>Stock forecast</h3><p class="muted">Based on recorded consumption</p></div></div><div id="forecastCards"></div></article>
+          </div>
+          <article class="panel table-panel"><div class="panel-head"><div><h3>Consumption log</h3><p class="muted">Record quantity used to improve estimates</p></div></div><div id="consumptionTable"></div></article>
+          <div class="info-banner"><span>ⓘ</span><div><b>How prediction works</b><p>Average daily use = total logged quantity used ÷ days observed. Estimated days remaining = current quantity ÷ average daily use. Estimates need enough reliable history.</p></div></div>
+        </section>
+
+        <section class="page" id="page-shopping">
+          <div class="welcome-row"><div><p class="eyebrow">PLAN YOUR NEXT SHOP</p><h1>Smart Shopping List</h1><p class="muted">A simple list for items you need to buy.</p></div><button id="addShoppingBtn" class="btn primary">＋ Add to list</button></div>
+          <div class="stat-grid shopping-stats"><article class="stat-card"><span class="muted">Total on list</span><strong id="listTotal">0</strong></article><article class="stat-card"><span class="muted">Checked off</span><strong id="listChecked">0</strong></article><article class="stat-card"><span class="muted">Suggested from low stock</span><strong id="listSuggested">0</strong></article></div>
+          <article class="panel"><div class="panel-head"><div><h3>Your shopping list</h3><p class="muted">Tick off items as you shop</p></div><button id="suggestLowBtn" class="btn secondary">＋ Add low-stock items</button></div><div id="shoppingList"></div></article>
+        </section>
+      </div>
+      <footer class="footer">🌿 FreshGuard AI <span>Less waste · Better planning · Smarter living</span></footer>
+    </main>
+  </div>
+
+  <div id="itemModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="itemModalTitle">
+    <form id="itemForm" class="modal">
+      <div class="modal-head"><div><p class="eyebrow">HOUSEHOLD INVENTORY</p><h2 id="itemModalTitle">Add new item</h2></div><button type="button" class="close-btn" data-close="itemModal" aria-label="Close">×</button></div>
+      <input id="editId" type="hidden">
+      <div class="form-grid">
+        <label>Item name *<input id="itemName" required placeholder="e.g. Rice"></label>
+        <label>Category<select id="itemCategory"><option>Grains</option><option>Dairy</option><option>Vegetables</option><option>Fruits</option><option>Meat</option><option>Household</option><option>Other</option></select></label>
+        <label>Quantity *<input id="itemQuantity" type="number" min="0" step="any" required placeholder="e.g. 2"></label>
+        <label>Unit<select id="itemUnit"><option>kg</option><option>g</option><option>litre</option><option>ml</option><option>pieces</option><option>pack</option></select></label>
+        <label>Location<select id="itemLocation"><option>Pantry</option><option>Fridge</option><option>Kitchen</option><option>Freezer</option><option>Bathroom</option><option>Other</option></select></label>
+        <label>Purchase date<input id="itemPurchase" type="date"></label>
+        <label>Expiry date<input id="itemExpiry" type="date"></label>
+        <label>Low-stock threshold<input id="itemThreshold" type="number" min="0" step="any" value="1"></label>
+      </div>
+      <p class="form-error" id="itemError"></p>
+      <div class="modal-actions"><button type="button" class="btn secondary" data-close="itemModal">Cancel</button><button type="submit" class="btn primary">Save item</button></div>
+    </form>
+  </div>
+
+  <div id="usageModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="usageModalTitle">
+    <form id="usageForm" class="modal compact-modal">
+      <div class="modal-head"><div><p class="eyebrow">CONSUMPTION TRACKING</p><h2 id="usageModalTitle">Log consumption</h2></div><button type="button" class="close-btn" data-close="usageModal" aria-label="Close">×</button></div>
+      <label>Item *<select id="usageItem" required></select></label>
+      <div class="form-grid"><label>Quantity used *<input id="usageQuantity" type="number" min="0.001" step="any" required></label><label>Date *<input id="usageDate" type="date" required></label></div>
+      <label>Note (optional)<input id="usageNote" placeholder="e.g. Used for dinner"></label>
+      <p class="form-error" id="usageError"></p>
+      <div class="modal-actions"><button type="button" class="btn secondary" data-close="usageModal">Cancel</button><button class="btn primary" type="submit">Save usage</button></div>
+    </form>
+  </div>
+
+  <div id="shoppingModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="shoppingModalTitle">
+    <form id="shoppingForm" class="modal compact-modal">
+      <div class="modal-head"><div><p class="eyebrow">SHOPPING PLANNER</p><h2 id="shoppingModalTitle">Add to shopping list</h2></div><button type="button" class="close-btn" data-close="shoppingModal" aria-label="Close">×</button></div>
+      <label>Item name *<input id="shoppingName" required placeholder="e.g. Milk"></label>
+      <div class="form-grid"><label>Quantity<input id="shoppingQuantity" placeholder="e.g. 2 litres"></label><label>Priority<select id="shoppingPriority"><option>Medium</option><option>High</option><option>Low</option></select></label></div>
+      <p class="form-error" id="shoppingError"></p>
+      <div class="modal-actions"><button type="button" class="btn secondary" data-close="shoppingModal">Cancel</button><button class="btn primary" type="submit">Add item</button></div>
+    </form>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+<div id="expiryPopup" class="expiry-overlay hidden">
+  <div class="expiry-window">
+
+    <div class="expiry-header">
+      <div class="expiry-heading">
+        <span class="expiry-bell">🔔</span>
+        <div>
+          <h2>Expiry Notifications</h2>
+          <p>Check the items that need your attention</p>
+        </div>
+      </div>
+      <button type="button" class="expiry-close"
+              data-close="expiryPopup">×</button>
+    </div>
+
+    <div class="expiry-summary">
+      <div>
+        <span class="summary-label">Expiring soon</span>
+        <strong id="expiryCount">0 items</strong>
+      </div>
+      <span class="expiry-status">Action needed</span>
+    </div>
+
+    <div id="expiryPopupContent" class="expiry-list"></div>
+
+    <div class="expiry-footer">
+      <span>FreshGuard AI · Smart Home Inventory</span>
+      <button type="button" class="expiry-done"
+              data-close="expiryPopup">Done</button>
+    </div>
+
+  </div>
+</div>
+
+
+  <script src="script.js"></script>
+</body>
+</html>
