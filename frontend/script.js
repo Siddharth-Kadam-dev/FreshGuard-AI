@@ -194,80 +194,153 @@ $("#mainNav").addEventListener("click",e=>{const b=e.target.closest("[data-page]
 document.addEventListener("click",e=>{const go=e.target.closest("[data-goto]");if(go)showPage(go.dataset.goto);const edit=e.target.closest("[data-edit]");if(edit)editItem(edit.dataset.edit);const del=e.target.closest("[data-delete]");if(del)deleteItem(del.dataset.delete);const close=e.target.closest("[data-close]");if(close)closeModal(close.dataset.close);const delShop=e.target.closest("[data-delete-shopping]");if(delShop){shopping=shopping.filter(s=>s.id!==delShop.dataset.deleteShopping);save();render();toast("Removed from shopping list.")}});
 $("#newItemBtn").addEventListener("click",()=>{resetItemForm();openModal("itemModal")});
 
-// OCR label scan: extracts readable text and tries to identify a product name and expiry date.
+// OCR label scan: extract product name and expiry date from a label image.
 const scanStatus = $("#scanStatus");
 $("#ocrImage").addEventListener("change", async e => {
   const file = e.target.files?.[0];
   if (!file) return;
-  if (!window.Tesseract) { scanStatus.textContent = "OCR library could not load. Check your internet connection and try again."; return; }
+  if (!window.Tesseract) {
+    scanStatus.textContent = "OCR library could not load. Check your internet connection and try again.";
+    e.target.value = "";
+    return;
+  }
   scanStatus.textContent = "Reading product label… please wait.";
   try {
-    const result = await Tesseract.recognize(file, "eng");
-    const text = result.data.text || "";
-    // Prefer text following common expiry labels; support YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY.
-    const labelled = text.match(/(?:EXP(?:IRY|IRATION)?|USE\s*BY|BEST\s*BEFORE|BBE|EXP\s*DATE)[^\d]{0,15}(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/i);
-    const anyDate = text.match(/\b(\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})\b/);
-    const rawDate = labelled?.[1] || anyDate?.[1];
-    if (!$("#itemName").value.trim()) {
-      const lines = text.split(/\r?\n/).map(x=>x.trim()).filter(x=>x.length>2);
-      const candidate = lines.find(x=>!/EXPIR|BEST BEFORE|USE BY|MFG|MANUFACT|NET WT|INGREDIENT|NUTRITION|MRP|BATCH|LOT|DATE/i.test(x) && /[A-Za-z]/.test(x));
-      if (candidate) $("#itemName").value = candidate.replace(/[^A-Za-z0-9 &'().-]/g, "").slice(0,60).trim();
-    }
+    const result = await Tesseract.recognize(file, "eng", {
+      logger: m => { if (m.status === "recognizing text") scanStatus.textContent = `Reading product label… ${Math.round((m.progress || 0) * 100)}%`; }
+    });
+    const text = (result.data.text || "").replace(/\u00a0/g, " ");
+    const lines = text.split(/\r?\n/).map(x => x.replace(/\s+/g, " ").trim()).filter(x => x.length > 2);
+
+    // Support common printed dates such as 12/10/2026, 12-10-26, 2026-10-12,
+    // and dates written with month names (12 Oct 2026 / Oct 12, 2026).
+    const dateToken = String.raw`(?:\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[,. ]+\d{2,4}|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\s+\d{1,2}[, ]+\d{2,4})`;
+    const labelled = text.match(new RegExp(String.raw`(?:EXP(?:IRY|IRATION)?|USE\s*BY|BEST\s*BEFORE|BBE|EXP\s*DATE|VALID\s*UNTIL)[^\dA-Z]{0,20}(${dateToken})`, "i"));
+    const anyDate = text.match(new RegExp(String.raw`\b(${dateToken})\b`, "i"));
+    const rawDate = (labelled && labelled[1]) || (anyDate && anyDate[1]);
+
+    // Pick a likely product-name line; do not accidentally use date/weight/ingredient text.
+    const ignored = /EXPIR|BEST BEFORE|USE BY|MFG|MANUFACT|NET\s?(WT|WEIGHT)|INGREDIENT|NUTRITION|MRP|BATCH|LOT|PACKED|CUSTOMER CARE|FSSAI|ADDRESS|PRODUCT OF|KEEP IN|STORAGE|BARCODE/i;
+    const candidates = lines.filter(x => /[A-Za-z]/.test(x) && !ignored.test(x) && !new RegExp(dateToken, "i").test(x) && x.length >= 3 && x.length <= 70);
+    const candidate = candidates.sort((a,b) => {
+      const score = x => (/^[A-Za-z][A-Za-z0-9 &'().-]*$/.test(x) ? 3 : 0) + (x.split(/\s+/).length <= 5 ? 2 : 0) - (/[0-9]{4,}/.test(x) ? 2 : 0);
+      return score(b) - score(a);
+    })[0];
+    if (candidate) $("#itemName").value = candidate.replace(/[^A-Za-z0-9 &'().-]/g, "").trim().slice(0,60);
+
+    let iso = "";
     if (rawDate) {
-      let iso = "";
       let m = rawDate.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);
       if (m) iso = `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
-      else {
-        m = rawDate.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
-        if (m) { let year = Number(m[3]); if (year < 100) year += year < 70 ? 2000 : 1900; const a=Number(m[1]), b=Number(m[2]); const day=a>12?a:b>12?b:a; const month=a>12?b:b>12?a:b; iso=`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`; }
+      else if ((m = rawDate.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/))) {
+        let year = Number(m[3]); if (year < 100) year += year < 70 ? 2000 : 1900;
+        const first = Number(m[1]), second = Number(m[2]);
+        // Ambiguous dates use DD/MM/YYYY, common on Indian food packaging.
+        const day = first, month = second;
+        if (first <= 12 && second > 12) { /* clearly MM/DD/YYYY */ iso = `${year}-${String(first).padStart(2,"0")}-${String(second).padStart(2,"0")}`; }
+        else iso = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+      } else {
+        const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+        m = rawDate.match(/^(\d{1,2})\s+([A-Za-z]+)[,. ]+(\d{2,4})$/);
+        if (m) { let y=Number(m[3]); if(y<100)y+=y<70?2000:1900; const mo=months[m[2].slice(0,3).toLowerCase()]; if(mo) iso=`${y}-${String(mo).padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
+        else if ((m = rawDate.match(/^([A-Za-z]+)\s+(\d{1,2})[, ]+(\d{2,4})$/))) { let y=Number(m[3]); if(y<100)y+=y<70?2000:1900; const mo=months[m[1].slice(0,3).toLowerCase()]; if(mo) iso=`${y}-${String(mo).padStart(2,"0")}-${m[2].padStart(2,"0")}`; }
       }
-      if (iso && !Number.isNaN(Date.parse(iso))) $("#itemExpiry").value = iso;
-      scanStatus.textContent = `Label scanned. ${rawDate ? "Expiry date detected — please verify it." : "No expiry date found; enter it manually."} Please verify the item name too.`;
-    } else scanStatus.textContent = "Label scanned, but expiry date was not recognized. Please enter it manually and verify the name.";
-    toast("OCR scan complete. Verify the extracted details.");
-  } catch (err) { scanStatus.textContent = "Could not read this image. Try a clearer, well-lit label photo."; }
+      if (iso) {
+        const [y,mo,d] = iso.split("-").map(Number);
+        const valid = mo >= 1 && mo <= 12 && d >= 1 && d <= new Date(y,mo,0).getDate();
+        if (valid) $("#itemExpiry").value = iso; else iso = "";
+      }
+    }
+    const detected = [];
+    if (candidate) detected.push(`name: ${$("#itemName").value}`);
+    if (iso) detected.push(`expiry: ${iso}`);
+    scanStatus.textContent = detected.length
+      ? `OCR complete — detected ${detected.join("; ")}. Please verify the fields before saving.`
+      : `OCR ran, but could not confidently identify the name or expiry date. Try a clear, close-up photo with the label facing the camera, or enter details manually.`;
+    toast("OCR scan complete. Verify extracted details before saving.");
+  } catch (err) {
+    scanStatus.textContent = "Could not read this image. Try a clearer, well-lit label photo.";
+  }
   e.target.value = "";
 });
 
 let barcodeReader = null;
+let nativeBarcodeStream = null;
+let nativeBarcodeTimer = null;
+async function handleScannedBarcode(code) {
+  scanStatus.textContent = `Barcode scanned: ${code}. Looking up product…`;
+  try {
+    const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
+    const data = await response.json(); const product = data.product;
+    if (data.status === 1 && product) {
+      if (product.product_name) $("#itemName").value = product.product_name;
+      const cats = (product.categories_tags || []).join(" ").toLowerCase();
+      if (/grain|rice|cereal|pasta|flour/.test(cats)) $("#itemCategory").value = "Grains";
+      else if (/dairy|milk|cheese|yogurt/.test(cats)) $("#itemCategory").value = "Dairy";
+      else if (/vegetable/.test(cats)) $("#itemCategory").value = "Vegetables";
+      else if (/fruit/.test(cats)) $("#itemCategory").value = "Fruits";
+      scanStatus.textContent = `Product found: ${product.product_name || "Name unavailable"}. Check the package and enter the expiry date, then press Save item to add it to Inventory Management.`;
+    } else {
+      scanStatus.textContent = `Barcode ${code} scanned, but product was not found in the database. Enter the item name and expiry date, then press Save item to add it to Inventory Management.`;
+      $("#itemName").focus();
+    }
+  } catch (_) { scanStatus.textContent = `Barcode ${code} scanned, but online lookup failed. Enter product details manually.`; }
+  if (!( $("#itemQuantity").value)) $("#itemQuantity").value = "1";
+  if (!$("#itemPurchase").value) $("#itemPurchase").value = todayISO();
+  toast("Barcode scanned. Verify details and press Save item.");
+  if ($("#itemExpiry")) $("#itemExpiry").focus();
+}
+function stopNativeBarcodeScan() {
+  if (nativeBarcodeTimer) clearInterval(nativeBarcodeTimer);
+  nativeBarcodeTimer = null;
+  if (nativeBarcodeStream) nativeBarcodeStream.getTracks().forEach(track => track.stop());
+  nativeBarcodeStream = null;
+  $("#barcodeVideo").classList.add("hidden");
+  $("#stopBarcodeBtn").classList.add("hidden");
+}
 $("#startBarcodeBtn").addEventListener("click", async () => {
   const video = $("#barcodeVideo");
-  if (!window.ZXingBrowser?.BrowserMultiFormatReader) { scanStatus.textContent = "Barcode library did not load. Check your internet connection."; return; }
   try {
-    barcodeReader = new ZXingBrowser.BrowserMultiFormatReader();
+    if (window.ZXingBrowser?.BrowserMultiFormatReader) {
+      barcodeReader = new ZXingBrowser.BrowserMultiFormatReader();
+      video.classList.remove("hidden"); $("#stopBarcodeBtn").classList.remove("hidden");
+      scanStatus.textContent = "Allow camera access and hold the barcode inside the frame.";
+      await barcodeReader.decodeFromVideoDevice(undefined, video, async (result, error, controls) => {
+        if (!result) return;
+        controls.stop(); video.classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden");
+        await handleScannedBarcode(result.getText());
+      });
+      return;
+    }
+    // Fallback for modern browsers: use the built-in BarcodeDetector, without an external library.
+    if (!("BarcodeDetector" in window)) {
+      scanStatus.textContent = "Barcode scanner could not load. Try Chrome on HTTPS, refresh the page, or use manual item entry.";
+      return;
+    }
+    const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"] });
+    nativeBarcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    video.srcObject = nativeBarcodeStream;
     video.classList.remove("hidden"); $("#stopBarcodeBtn").classList.remove("hidden");
-    scanStatus.textContent = "Allow camera access and hold the barcode inside the frame.";
-    await barcodeReader.decodeFromVideoDevice(undefined, video, async (result, error, controls) => {
-      if (!result) return;
-      controls.stop(); video.classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden");
-      const code = result.getText(); scanStatus.textContent = `Barcode scanned: ${code}. Looking up product…`;
+    await video.play();
+    scanStatus.textContent = "Camera on. Hold the barcode steady inside the frame.";
+    nativeBarcodeTimer = setInterval(async () => {
+      if (!nativeBarcodeStream || video.readyState < 2) return;
       try {
-        const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
-        const data = await response.json(); const product = data.product;
-        if (data.status === 1 && product) {
-          if (product.product_name) $("#itemName").value = product.product_name;
-          const cats = (product.categories_tags || []).join(" ").toLowerCase();
-          if (/grain|rice|cereal|pasta|flour/.test(cats)) $("#itemCategory").value = "Grains";
-          else if (/dairy|milk|cheese|yogurt/.test(cats)) $("#itemCategory").value = "Dairy";
-          else if (/vegetable/.test(cats)) $("#itemCategory").value = "Vegetables";
-          else if (/fruit/.test(cats)) $("#itemCategory").value = "Fruits";
-          // Make the scanned item ready to save, while leaving expiry for the user to verify.
-          if (!$("#itemQuantity").value) $("#itemQuantity").value = "1";
-          if (!$("#itemPurchase").value) $("#itemPurchase").value = todayISO();
-          scanStatus.textContent = `Product found: ${product.product_name || "Name unavailable"}. Quantity set to 1 by default. Check the package and enter the expiry date, then press Save item to add it to Inventory Management.`;
-          $("#itemExpiry").focus();
-        } else {
-          if (!$("#itemQuantity").value) $("#itemQuantity").value = "1";
-          if (!$("#itemPurchase").value) $("#itemPurchase").value = todayISO();
-          scanStatus.textContent = `Barcode ${code} scanned, but product was not found in the database. Enter the item name and expiry date, then press Save item to add it to Inventory Management.`;
-          $("#itemName").focus();
+        const codes = await detector.detect(video);
+        if (codes.length && codes[0].rawValue) {
+          const code = codes[0].rawValue;
+          stopNativeBarcodeScan();
+          await handleScannedBarcode(code);
         }
-        toast("Barcode scanned. Verify details and press Save item.");
-      } catch (_) { scanStatus.textContent = `Barcode ${code} scanned, but online lookup failed. Enter product details manually.`; }
-    });
-  } catch (err) { video.classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden"); scanStatus.textContent = "Camera unavailable. Use HTTPS, allow camera permission, or try OCR image upload."; }
+      } catch (_) { /* Continue scanning on the next frame. */ }
+    }, 250);
+  } catch (err) {
+    stopNativeBarcodeScan();
+    video.classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden");
+    scanStatus.textContent = "Camera unavailable. Open the HTTPS website, allow camera permission, and try again.";
+  }
 });
-$("#stopBarcodeBtn").addEventListener("click", () => { try { barcodeReader?.reset(); } catch (_) {} $("#barcodeVideo").classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden"); scanStatus.textContent = "Camera stopped."; });
+$("#stopBarcodeBtn").addEventListener("click", () => { try { barcodeReader?.reset(); } catch (_) {} stopNativeBarcodeScan(); $("#barcodeVideo").classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden"); scanStatus.textContent = "Camera stopped."; });
 
 $("#itemForm").addEventListener("submit", async e => {
   e.preventDefault();
