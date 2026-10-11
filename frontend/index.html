@@ -118,6 +118,18 @@
     <form id="itemForm" class="modal">
       <div class="modal-head"><div><p class="eyebrow">HOUSEHOLD INVENTORY</p><h2 id="itemModalTitle">Add new item</h2></div><button type="button" class="close-btn" data-close="itemModal" aria-label="Close">×</button></div>
       <input id="editId" type="hidden">
+      <section class="scan-tools" style="padding:12px;border:1px solid #dce8e1;border-radius:12px;margin:12px 0;background:#f7fbf8">
+        <strong>Quick Add with Scanner</strong>
+        <p class="muted" style="margin:4px 0 10px">Scan a product label to read its name/expiry, or scan a barcode to look up product details.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label class="btn secondary" for="ocrImage" style="cursor:pointer">📷 Scan label (OCR)</label>
+          <input id="ocrImage" type="file" accept="image/*" capture="environment" hidden>
+          <button type="button" class="btn secondary" id="startBarcodeBtn">▦ Scan barcode</button>
+          <button type="button" class="btn secondary hidden" id="stopBarcodeBtn">Stop camera</button>
+        </div>
+        <video id="barcodeVideo" class="hidden" playsinline style="width:100%;max-height:220px;object-fit:contain;margin-top:10px;border-radius:8px;background:#111"></video>
+        <p id="scanStatus" class="muted" aria-live="polite" style="margin:8px 0 0"></p>
+      </section>
       <div class="form-grid">
         <label>Item name *<input id="itemName" required placeholder="e.g. Rice"></label>
         <label>Category<select id="itemCategory"><option>Grains</option><option>Dairy</option><option>Vegetables</option><option>Fruits</option><option>Meat</option><option>Household</option><option>Other</option></select></label>
@@ -189,6 +201,8 @@
 </div>
 
 
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
