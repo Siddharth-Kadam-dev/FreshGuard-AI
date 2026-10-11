@@ -495,36 +495,7 @@ $("#stopBarcodeBtn").addEventListener("click", () => {
   scanStatus.textContent = "Camera stopped.";
 });
 
-    // Fallback for modern browsers: use the built-in BarcodeDetector, without an external library.
-    if (!("BarcodeDetector" in window)) {
-      scanStatus.textContent = "Barcode scanner could not load. Try Chrome on HTTPS, refresh the page, or use manual item entry.";
-      return;
-    }
-    const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"] });
-    nativeBarcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
-    video.srcObject = nativeBarcodeStream;
-    video.classList.remove("hidden"); $("#stopBarcodeBtn").classList.remove("hidden");
-    await video.play();
-    scanStatus.textContent = "Camera on. Hold the barcode steady inside the frame.";
-    nativeBarcodeTimer = setInterval(async () => {
-      if (!nativeBarcodeStream || video.readyState < 2) return;
-      try {
-        const codes = await detector.detect(video);
-        if (codes.length && codes[0].rawValue) {
-          const code = codes[0].rawValue;
-          stopNativeBarcodeScan();
-          await handleScannedBarcode(code);
-        }
-      } catch (_) { /* Continue scanning on the next frame. */ }
-    }, 250);
-  } catch (err) {
-    stopNativeBarcodeScan();
-    video.classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden");
-    scanStatus.textContent = "Camera unavailable. Open the HTTPS website, allow camera permission, and try again.";
-  }
-});
-$("#stopBarcodeBtn").addEventListener("click", () => { try { barcodeReader?.reset(); } catch (_) {} stopNativeBarcodeScan(); $("#barcodeVideo").classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden"); scanStatus.textContent = "Camera stopped."; });
-
+    
 $("#itemForm").addEventListener("submit", async e => {
   e.preventDefault();
 
