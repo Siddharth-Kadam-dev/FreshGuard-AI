@@ -229,55 +229,272 @@ $("#ocrImage").addEventListener("change", async e => {
   e.target.value = "";
 });
 
+
+/* ==================== BARCODE SCANNER FIX ==================== */
+
 let barcodeReader = null;
 let nativeBarcodeStream = null;
 let nativeBarcodeTimer = null;
+let barcodeDetectBusy = false;
+
 async function handleScannedBarcode(code) {
-  scanStatus.textContent = `Barcode scanned: ${code}. Looking up product…`;
+  scanStatus.textContent = `Barcode scanned: ${code}. Looking up product...`;
+
   try {
-    const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
-    const data = await response.json(); const product = data.product;
+    const response = await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`
+    );
+
+    if (!response.ok) throw new Error("Product lookup failed");
+
+    const data = await response.json();
+    const product = data.product;
+
     if (data.status === 1 && product) {
-      if (product.product_name) $("#itemName").value = product.product_name;
-      const cats = (product.categories_tags || []).join(" ").toLowerCase();
-      if (/grain|rice|cereal|pasta|flour/.test(cats)) $("#itemCategory").value = "Grains";
-      else if (/dairy|milk|cheese|yogurt/.test(cats)) $("#itemCategory").value = "Dairy";
-      else if (/vegetable/.test(cats)) $("#itemCategory").value = "Vegetables";
-      else if (/fruit/.test(cats)) $("#itemCategory").value = "Fruits";
-      scanStatus.textContent = `Product found: ${product.product_name || "Name unavailable"}. Check the package and enter the expiry date, then press Save item to add it to Inventory Management.`;
+      if (product.product_name) {
+        $("#itemName").value = product.product_name;
+      }
+
+      const cats = (product.categories_tags || [])
+        .join(" ")
+        .toLowerCase();
+
+      if (/grain|rice|cereal|pasta|flour/.test(cats)) {
+        $("#itemCategory").value = "Grains";
+      } else if (/dairy|milk|cheese|yogurt/.test(cats)) {
+        $("#itemCategory").value = "Dairy";
+      } else if (/vegetable/.test(cats)) {
+        $("#itemCategory").value = "Vegetables";
+      } else if (/fruit/.test(cats)) {
+        $("#itemCategory").value = "Fruits";
+      }
+
+      scanStatus.textContent =
+        `Product found: ${product.product_name || "Name unavailable"}. Verify the details and enter the expiry date.`;
     } else {
-      scanStatus.textContent = `Barcode ${code} scanned, but product was not found in the database. Enter the item name and expiry date, then press Save item to add it to Inventory Management.`;
+      scanStatus.textContent =
+        `Barcode ${code} scanned, but product was not found. Enter the item name manually.`;
       $("#itemName").focus();
     }
-  } catch (_) { scanStatus.textContent = `Barcode ${code} scanned, but online lookup failed. Enter product details manually.`; }
-  if (!( $("#itemQuantity").value)) $("#itemQuantity").value = "1";
-  if (!$("#itemPurchase").value) $("#itemPurchase").value = todayISO();
-  toast("Barcode scanned. Verify details and press Save item.");
+  } catch (error) {
+    scanStatus.textContent =
+      `Barcode ${code} scanned. Online lookup failed; enter product details manually.`;
+  }
+
+  if (!$("#itemQuantity").value) {
+    $("#itemQuantity").value = "1";
+  }
+
+  if (!$("#itemPurchase").value) {
+    $("#itemPurchase").value = todayISO();
+  }
+
+  toast("Barcode scanned. Verify details before saving.");
+
   if ($("#itemExpiry")) $("#itemExpiry").focus();
 }
+
 function stopNativeBarcodeScan() {
-  if (nativeBarcodeTimer) clearInterval(nativeBarcodeTimer);
+  if (nativeBarcodeTimer) {
+    clearInterval(nativeBarcodeTimer);
+  }
+
   nativeBarcodeTimer = null;
-  if (nativeBarcodeStream) nativeBarcodeStream.getTracks().forEach(track => track.stop());
+  barcodeDetectBusy = false;
+
+  if (nativeBarcodeStream) {
+    nativeBarcodeStream.getTracks().forEach(track => track.stop());
+  }
+
   nativeBarcodeStream = null;
-  $("#barcodeVideo").classList.add("hidden");
+
+  const video = $("#barcodeVideo");
+
+  if (video) {
+    video.pause();
+    video.srcObject = null;
+    video.classList.add("hidden");
+  }
+
   $("#stopBarcodeBtn").classList.add("hidden");
 }
+
 $("#startBarcodeBtn").addEventListener("click", async () => {
   const video = $("#barcodeVideo");
+
   try {
-    const Reader = window.ZXingBrowser?.BrowserMultiFormatReader || window.ZXing?.BrowserMultiFormatReader;
+    scanStatus.textContent = "Starting camera...";
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Camera requires HTTPS and a supported browser.");
+    }
+
+    video.classList.remove("hidden");
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("autoplay", "true");
+    video.muted = true;
+
+    $("#stopBarcodeBtn").classList.remove("hidden");
+
+    // Try ZXing first because it supports more browsers.
+    const Reader =
+      window.ZXingBrowser?.BrowserMultiFormatReader ||
+      window.ZXing?.BrowserMultiFormatReader;
+
     if (Reader) {
       barcodeReader = new Reader();
-      video.classList.remove("hidden"); $("#stopBarcodeBtn").classList.remove("hidden");
-      scanStatus.textContent = "Allow camera access and hold the barcode inside the frame.";
-      await barcodeReader.decodeFromVideoDevice(undefined, video, async (result, error, controls) => {
-        if (!result) return;
-        controls.stop(); video.classList.add("hidden"); $("#stopBarcodeBtn").classList.add("hidden");
-        await handleScannedBarcode(result.getText());
-      });
+
+      scanStatus.textContent =
+        "Camera on. Center the barcode and hold the phone steady.";
+
+      await barcodeReader.decodeFromVideoDevice(
+        undefined,
+        video,
+        async (result, error, controls) => {
+          if (!result) return;
+
+          const code = result.getText();
+
+          try {
+            controls?.stop?.();
+            barcodeReader?.reset?.();
+          } catch (_) {}
+
+          barcodeReader = null;
+          stopNativeBarcodeScan();
+
+          await handleScannedBarcode(code);
+        }
+      );
+
       return;
     }
+
+    // Native browser fallback.
+    if (!("BarcodeDetector" in window)) {
+      throw new Error(
+        "Barcode library unavailable. Check the ZXing script in index.html."
+      );
+    }
+
+    let formats = [
+      "ean_13", "ean_8", "upc_a", "upc_e",
+      "code_128", "code_39", "itf", "qr_code"
+    ];
+
+    if (BarcodeDetector.getSupportedFormats) {
+      const supported = await BarcodeDetector.getSupportedFormats();
+      formats = formats.filter(format => supported.includes(format));
+    }
+
+    if (!formats.length) {
+      throw new Error("No supported barcode formats.");
+    }
+
+    const detector = new BarcodeDetector({ formats });
+
+    nativeBarcodeStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    video.srcObject = nativeBarcodeStream;
+    await video.play();
+
+    scanStatus.textContent =
+      "Camera on. Keep the barcode centered, flat and well-lit.";
+
+    nativeBarcodeTimer = setInterval(async () => {
+      if (
+        !nativeBarcodeStream ||
+        barcodeDetectBusy ||
+        video.readyState < 2 ||
+        !video.videoWidth
+      ) {
+        return;
+      }
+
+      barcodeDetectBusy = true;
+
+      try {
+        let codes = await detector.detect(video);
+
+        // Try the center crop if the full video frame did not detect it.
+        if (!codes.length) {
+          const canvas = document.createElement("canvas");
+          const vw = video.videoWidth;
+          const vh = video.videoHeight;
+          const cw = Math.floor(vw * 0.9);
+          const ch = Math.floor(vh * 0.8);
+
+          canvas.width = cw;
+          canvas.height = ch;
+
+          const ctx = canvas.getContext("2d", {
+            willReadFrequently: true
+          });
+
+          ctx.drawImage(
+            video,
+            Math.floor((vw - cw) / 2),
+            Math.floor((vh - ch) / 2),
+            cw,
+            ch,
+            0,
+            0,
+            cw,
+            ch
+          );
+
+          codes = await detector.detect(canvas);
+        }
+
+        const code = codes.find(item => item.rawValue)?.rawValue;
+
+        if (code) {
+          stopNativeBarcodeScan();
+          await handleScannedBarcode(code);
+        }
+      } catch (_) {
+        // Keep scanning subsequent frames.
+      } finally {
+        barcodeDetectBusy = false;
+      }
+    }, 250);
+
+  } catch (error) {
+    stopNativeBarcodeScan();
+
+    try {
+      barcodeReader?.reset?.();
+    } catch (_) {}
+
+    barcodeReader = null;
+
+    video.classList.add("hidden");
+    $("#stopBarcodeBtn").classList.add("hidden");
+
+    scanStatus.textContent =
+      "Scanner could not start. Check HTTPS, camera permission and internet. " +
+      (error.message || "");
+  }
+});
+
+$("#stopBarcodeBtn").addEventListener("click", () => {
+  try {
+    barcodeReader?.reset?.();
+  } catch (_) {}
+
+  barcodeReader = null;
+  stopNativeBarcodeScan();
+
+  scanStatus.textContent = "Camera stopped.";
+});
+
     // Fallback for modern browsers: use the built-in BarcodeDetector, without an external library.
     if (!("BarcodeDetector" in window)) {
       scanStatus.textContent = "Barcode scanner could not load. Try Chrome on HTTPS, refresh the page, or use manual item entry.";
