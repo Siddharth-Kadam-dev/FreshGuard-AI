@@ -194,73 +194,38 @@ $("#mainNav").addEventListener("click",e=>{const b=e.target.closest("[data-page]
 document.addEventListener("click",e=>{const go=e.target.closest("[data-goto]");if(go)showPage(go.dataset.goto);const edit=e.target.closest("[data-edit]");if(edit)editItem(edit.dataset.edit);const del=e.target.closest("[data-delete]");if(del)deleteItem(del.dataset.delete);const close=e.target.closest("[data-close]");if(close)closeModal(close.dataset.close);const delShop=e.target.closest("[data-delete-shopping]");if(delShop){shopping=shopping.filter(s=>s.id!==delShop.dataset.deleteShopping);save();render();toast("Removed from shopping list.")}});
 $("#newItemBtn").addEventListener("click",()=>{resetItemForm();openModal("itemModal")});
 
-// OCR label scan: extract product name and expiry date from a label image.
+// OCR label scan: extracts readable text and tries to identify a product name and expiry date.
 const scanStatus = $("#scanStatus");
 $("#ocrImage").addEventListener("change", async e => {
   const file = e.target.files?.[0];
   if (!file) return;
-  if (!window.Tesseract) {
-    scanStatus.textContent = "OCR library could not load. Check your internet connection and try again.";
-    e.target.value = "";
-    return;
-  }
+  if (!window.Tesseract) { scanStatus.textContent = "OCR library could not load. Check your internet connection and try again."; return; }
   scanStatus.textContent = "Reading product label… please wait.";
   try {
-    const result = await Tesseract.recognize(file, "eng", {
-      logger: m => { if (m.status === "recognizing text") scanStatus.textContent = `Reading product label… ${Math.round((m.progress || 0) * 100)}%`; }
-    });
-    const text = (result.data.text || "").replace(/\u00a0/g, " ");
-    const lines = text.split(/\r?\n/).map(x => x.replace(/\s+/g, " ").trim()).filter(x => x.length > 2);
-
-    // Support common printed dates such as 12/10/2026, 12-10-26, 2026-10-12,
-    // and dates written with month names (12 Oct 2026 / Oct 12, 2026).
-    const dateToken = String.raw`(?:\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[,. ]+\d{2,4}|(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\s+\d{1,2}[, ]+\d{2,4})`;
-    const labelled = text.match(new RegExp(String.raw`(?:EXP(?:IRY|IRATION)?|USE\s*BY|BEST\s*BEFORE|BBE|EXP\s*DATE|VALID\s*UNTIL)[^\dA-Z]{0,20}(${dateToken})`, "i"));
-    const anyDate = text.match(new RegExp(String.raw`\b(${dateToken})\b`, "i"));
-    const rawDate = (labelled && labelled[1]) || (anyDate && anyDate[1]);
-
-    // Pick a likely product-name line; do not accidentally use date/weight/ingredient text.
-    const ignored = /EXPIR|BEST BEFORE|USE BY|MFG|MANUFACT|NET\s?(WT|WEIGHT)|INGREDIENT|NUTRITION|MRP|BATCH|LOT|PACKED|CUSTOMER CARE|FSSAI|ADDRESS|PRODUCT OF|KEEP IN|STORAGE|BARCODE/i;
-    const candidates = lines.filter(x => /[A-Za-z]/.test(x) && !ignored.test(x) && !new RegExp(dateToken, "i").test(x) && x.length >= 3 && x.length <= 70);
-    const candidate = candidates.sort((a,b) => {
-      const score = x => (/^[A-Za-z][A-Za-z0-9 &'().-]*$/.test(x) ? 3 : 0) + (x.split(/\s+/).length <= 5 ? 2 : 0) - (/[0-9]{4,}/.test(x) ? 2 : 0);
-      return score(b) - score(a);
-    })[0];
-    if (candidate) $("#itemName").value = candidate.replace(/[^A-Za-z0-9 &'().-]/g, "").trim().slice(0,60);
-
-    let iso = "";
+    const result = await Tesseract.recognize(file, "eng");
+    const text = result.data.text || "";
+    // Prefer text following common expiry labels; support YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY.
+    const labelled = text.match(/(?:EXP(?:IRY|IRATION)?|USE\s*BY|BEST\s*BEFORE|BBE|EXP\s*DATE)[^\d]{0,15}(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/i);
+    const anyDate = text.match(/\b(\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})\b/);
+    const rawDate = labelled?.[1] || anyDate?.[1];
+    if (!$("#itemName").value.trim()) {
+      const lines = text.split(/\r?\n/).map(x=>x.trim()).filter(x=>x.length>2);
+      const candidate = lines.find(x=>!/EXPIR|BEST BEFORE|USE BY|MFG|MANUFACT|NET WT|INGREDIENT|NUTRITION|MRP|BATCH|LOT|DATE/i.test(x) && /[A-Za-z]/.test(x));
+      if (candidate) $("#itemName").value = candidate.replace(/[^A-Za-z0-9 &'().-]/g, "").slice(0,60).trim();
+    }
     if (rawDate) {
+      let iso = "";
       let m = rawDate.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);
       if (m) iso = `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
-      else if ((m = rawDate.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/))) {
-        let year = Number(m[3]); if (year < 100) year += year < 70 ? 2000 : 1900;
-        const first = Number(m[1]), second = Number(m[2]);
-        // Ambiguous dates use DD/MM/YYYY, common on Indian food packaging.
-        const day = first, month = second;
-        if (first <= 12 && second > 12) { /* clearly MM/DD/YYYY */ iso = `${year}-${String(first).padStart(2,"0")}-${String(second).padStart(2,"0")}`; }
-        else iso = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-      } else {
-        const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-        m = rawDate.match(/^(\d{1,2})\s+([A-Za-z]+)[,. ]+(\d{2,4})$/);
-        if (m) { let y=Number(m[3]); if(y<100)y+=y<70?2000:1900; const mo=months[m[2].slice(0,3).toLowerCase()]; if(mo) iso=`${y}-${String(mo).padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
-        else if ((m = rawDate.match(/^([A-Za-z]+)\s+(\d{1,2})[, ]+(\d{2,4})$/))) { let y=Number(m[3]); if(y<100)y+=y<70?2000:1900; const mo=months[m[1].slice(0,3).toLowerCase()]; if(mo) iso=`${y}-${String(mo).padStart(2,"0")}-${m[2].padStart(2,"0")}`; }
+      else {
+        m = rawDate.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+        if (m) { let year = Number(m[3]); if (year < 100) year += year < 70 ? 2000 : 1900; const a=Number(m[1]), b=Number(m[2]); const day=a>12?a:b>12?b:a; const month=a>12?b:b>12?a:b; iso=`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`; }
       }
-      if (iso) {
-        const [y,mo,d] = iso.split("-").map(Number);
-        const valid = mo >= 1 && mo <= 12 && d >= 1 && d <= new Date(y,mo,0).getDate();
-        if (valid) $("#itemExpiry").value = iso; else iso = "";
-      }
-    }
-    const detected = [];
-    if (candidate) detected.push(`name: ${$("#itemName").value}`);
-    if (iso) detected.push(`expiry: ${iso}`);
-    scanStatus.textContent = detected.length
-      ? `OCR complete — detected ${detected.join("; ")}. Please verify the fields before saving.`
-      : `OCR ran, but could not confidently identify the name or expiry date. Try a clear, close-up photo with the label facing the camera, or enter details manually.`;
-    toast("OCR scan complete. Verify extracted details before saving.");
-  } catch (err) {
-    scanStatus.textContent = "Could not read this image. Try a clearer, well-lit label photo.";
-  }
+      if (iso && !Number.isNaN(Date.parse(iso))) $("#itemExpiry").value = iso;
+      scanStatus.textContent = `Label scanned. ${rawDate ? "Expiry date detected — please verify it." : "No expiry date found; enter it manually."} Please verify the item name too.`;
+    } else scanStatus.textContent = "Label scanned, but expiry date was not recognized. Please enter it manually and verify the name.";
+    toast("OCR scan complete. Verify the extracted details.");
+  } catch (err) { scanStatus.textContent = "Could not read this image. Try a clearer, well-lit label photo."; }
   e.target.value = "";
 });
 
@@ -301,8 +266,9 @@ function stopNativeBarcodeScan() {
 $("#startBarcodeBtn").addEventListener("click", async () => {
   const video = $("#barcodeVideo");
   try {
-    if (window.ZXingBrowser?.BrowserMultiFormatReader) {
-      barcodeReader = new ZXingBrowser.BrowserMultiFormatReader();
+    const Reader = window.ZXingBrowser?.BrowserMultiFormatReader || window.ZXing?.BrowserMultiFormatReader;
+    if (Reader) {
+      barcodeReader = new Reader();
       video.classList.remove("hidden"); $("#stopBarcodeBtn").classList.remove("hidden");
       scanStatus.textContent = "Allow camera access and hold the barcode inside the frame.";
       await barcodeReader.decodeFromVideoDevice(undefined, video, async (result, error, controls) => {
@@ -520,93 +486,59 @@ async function registerApi(name, email, password) {
 
 /* ========== EXPIRY NOTIFICATION POPUP ========== */
 
-// Return items that need an expiry alert.
+// Upcoming reminders only appear at the requested milestones. Past dates are
+// shown in a separate Expired Items section and never mixed into upcoming alerts.
+function getExpiryPopupItems() {
+  return items.filter(item => item.expiry).map(item => ({
+    ...item,
+    daysLeft: daysTo(item.expiry)
+  }));
+}
 function getExpiryAlerts() {
-  return items
-    .filter(item => item.expiry)
-    .map(item => ({
-      ...item,
-      daysLeft: daysTo(item.expiry)
-    }))
-    .filter(item =>
-      item.daysLeft < 0 ||
-      [15, 7, 3, 1, 0].includes(item.daysLeft)
-    )
+  return getExpiryPopupItems()
+    .filter(item => [15, 7, 3, 1, 0].includes(item.daysLeft))
     .sort((a, b) => a.daysLeft - b.daysLeft);
 }
-
+function getExpiredItems() {
+  return getExpiryPopupItems()
+    .filter(item => item.daysLeft < 0)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+}
+function expiryItemMarkup(item, expired = false) {
+  const days = item.daysLeft;
+  const label = expired ? `Expired ${Math.abs(days)} day(s) ago` :
+    days === 0 ? "Expires today" : `Expires in ${days} day(s)`;
+  return `<div class="expiry-item ${expired || days === 0 ? "expired" : ""}">
+    <div class="expiry-item-icon">${icons[item.category] || "📦"}</div>
+    <div class="expiry-item-info"><h3>${esc(item.name)}</h3>
+      <p>Category: ${esc(item.category || "Other")}</p>
+      <p>Quantity: ${esc(String(item.quantity))} ${esc(item.unit || "")}</p>
+      <p>Location: ${esc(item.location || "Not specified")}</p></div>
+    <div class="expiry-item-date"><strong>${esc(label)}</strong><span>${dateText(item.expiry)}</span></div>
+  </div>`;
+}
 function showExpiryPopup() {
   const popup = $("#expiryPopup");
   const content = $("#expiryPopupContent");
   const count = $("#expiryCount");
-
+  const expiredSection = $("#expiredPopupSection");
+  const expiredContent = $("#expiredPopupContent");
   if (!popup || !content) return;
 
   const alerts = getExpiryAlerts();
-
-  if (count) {
-    count.textContent =
-      `${alerts.length} alert${alerts.length === 1 ? "" : "s"}`;
+  const expired = getExpiredItems();
+  if (count) count.textContent = `${alerts.length} alert${alerts.length === 1 ? "" : "s"}`;
+  content.innerHTML = alerts.length
+    ? alerts.map(item => expiryItemMarkup(item)).join("")
+    : `<div class="expiry-empty"><div style="font-size:32px">✅</div><h3>No upcoming milestone alerts</h3><p>No items are due at 15, 7, 3, 1 or 0 days.</p></div>`;
+  if (expiredSection && expiredContent) {
+    expiredSection.style.display = expired.length ? "block" : "none";
+    expiredContent.innerHTML = expired.map(item => expiryItemMarkup(item, true)).join("");
   }
-
-  if (alerts.length === 0) {
-    content.innerHTML = `
-      <div class="expiry-empty">
-        <div style="font-size:36px">✅</div>
-        <h3>All items are fresh!</h3>
-        <p>No expiry reminders are due today.</p>
-      </div>
-    `;
-
-    popup.classList.remove("hidden");
-    return;
-  }
-
-  content.innerHTML = alerts.map(item => {
-    const days = item.daysLeft;
-
-    let label;
-    let alertClass = "";
-
-    if (days < 0) {
-      label = `Expired ${Math.abs(days)} day(s) ago`;
-      alertClass = "expired";
-    } else if (days === 0) {
-      label = "Expires today";
-      alertClass = "expired";
-    } else {
-      label = `Expires in ${days} day(s)`;
-    }
-
-    return `
-      <div class="expiry-item ${alertClass}">
-        <div class="expiry-item-icon">
-          ${icons[item.category] || "📦"}
-        </div>
-
-        <div class="expiry-item-info">
-          <h3>${esc(item.name)}</h3>
-          <p>Category: ${esc(item.category || "Other")}</p>
-          <p>
-            Quantity: ${esc(String(item.quantity))}
-            ${esc(item.unit || "")}
-          </p>
-          <p>Location: ${esc(item.location || "Not specified")}</p>
-        </div>
-
-        <div class="expiry-item-date">
-          <strong>${esc(label)}</strong>
-          <span>${dateText(item.expiry)}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
-
   popup.classList.remove("hidden");
 }
-
 function checkExpiryOnOpen() {
-  if (getExpiryAlerts().length > 0) {
+  if (getExpiryAlerts().length > 0 || getExpiredItems().length > 0) {
     setTimeout(showExpiryPopup, 600);
   }
 }
