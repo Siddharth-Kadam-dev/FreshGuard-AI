@@ -183,13 +183,17 @@
 
     <div class="expiry-summary">
       <div>
-        <span class="summary-label">Expiring soon</span>
+        <span class="summary-label">Expiring soon (15, 7, 3, 1 or 0 days)</span>
         <strong id="expiryCount">0 items</strong>
       </div>
       <span class="expiry-status">Action needed</span>
     </div>
 
     <div id="expiryPopupContent" class="expiry-list"></div>
+    <section id="expiredPopupSection" class="expiry-list" style="display:none;border-top:1px solid #e6eee9;padding-top:16px;margin-top:8px">
+      <h3 style="margin:0 0 12px;color:#a93226">Expired Items — Keep separate from upcoming reminders</h3>
+      <div id="expiredPopupContent"></div>
+    </section>
 
     <div class="expiry-footer">
       <span>FreshGuard AI · Smart Home Inventory</span>
@@ -202,7 +206,7 @@
 
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js'"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js'"></script>
   <script src="script.js"></script>
 </body>
 </html>
